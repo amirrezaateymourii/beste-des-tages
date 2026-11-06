@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Best of the Day</title>
+  <meta name="theme-color" content="#f6efe6" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Best of the Day" />
+  <link rel="apple-touch-icon" href="icons/icon-180.png" />
+  <!-- To change the font: swap "Nunito" here AND in styles.css (--font). Vazirmatn covers Persian. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Vazirmatn:wght@400;600;700;800&display=swap" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main>
+
+    <!-- ============ Sign in ============ -->
+    <section id="screen-login" class="screen auth" hidden>
+      <div class="auth-hero">
+        <span class="sun big" aria-hidden="true"></span>
+        <h1 class="display">Best of<br />the Day</h1>
+        <p class="lead muted">One moment a day,<br />shared with your bestie.</p>
+      </div>
+      <form id="email-form" class="stack">
+        <label for="email" class="sr-only">Email</label>
+        <input id="email" class="pill-input" type="email" autocomplete="email" required placeholder="Your email" />
+        <button type="submit" class="btn dark">Continue <span aria-hidden="true">→</span></button>
+        <p class="hint center">No password. We'll email you a code.</p>
+      </form>
+    </section>
+
+    <!-- ============ Code ============ -->
+    <section id="screen-code" class="screen auth" hidden>
+      <button type="button" class="round-btn" id="code-back" aria-label="Back">
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <div class="auth-hero top">
+        <h1 class="title">Check your email</h1>
+        <p class="lead muted">We sent a code to<br /><strong id="code-email" class="ink"></strong></p>
+      </div>
+      <form id="code-form" class="stack">
+        <label for="code" class="sr-only">Code from the email</label>
+        <input id="code" class="code-input" inputmode="numeric" autocomplete="one-time-code" required pattern="[0-9]{6,10}" maxlength="10" placeholder="••••••" />
+        <p class="hint">Didn't get it? Check spam, or <button type="button" class="link-btn" id="resend">send again</button>.</p>
+        <button type="submit" class="btn dark">Sign in</button>
+      </form>
+    </section>
+
+    <!-- ============ Name ============ -->
+    <section id="screen-name" class="screen auth" hidden>
+      <div class="auth-hero top">
+        <h1 class="title">What's your name?</h1>
+        <p class="lead muted">This is what your bestie sees.</p>
+      </div>
+      <form id="name-form" class="stack">
+        <label for="display-name" class="sr-only">Your name</label>
+        <input id="display-name" class="pill-input" maxlength="40" required dir="auto" placeholder="Your name" />
+        <button type="submit" class="btn dark">Continue</button>
+      </form>
+    </section>
+
+    <!-- ============ Pair with a bestie ============ -->
+    <section id="screen-pair" class="screen" hidden>
+      <button type="button" class="round-btn" id="pair-back" aria-label="Back" hidden>
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <h1 class="title">Your bestie</h1>
+      <p class="lead muted">Best of the Day is for two. Send your code, or enter theirs.</p>
+      <div class="card stack">
+        <p class="label">Your code</p>
+        <p class="invite-code" id="my-code" aria-live="polite">······</p>
+        <button type="button" class="btn" id="share-code">Share code</button>
+      </div>
+      <form id="join-form" class="card stack">
+        <label for="join-code" class="label">Got a code from your bestie?</label>
+        <input id="join-code" class="code-input small" maxlength="6" required autocapitalize="characters" autocomplete="off" placeholder="A1B2C3" />
+        <button type="submit" class="btn outline">Pair up</button>
+      </form>
+    </section>
+
+    <!-- ============ The app (3 tabs) ============ -->
+    <section id="screen-app" class="screen" hidden>
+      <div id="tab-home" class="tab">
+        <div id="strip" class="strip" aria-label="Days. Swipe left or right to change week." role="group"></div>
+        <div id="day"></div>
+      </div>
+      <div id="tab-feed" class="tab" hidden>
+        <h1 class="title">Feed</h1>
+        <div id="feed" class="feed"></div>
+      </div>
+      <div id="tab-people" class="tab" hidden>
+        <h1 class="title">People</h1>
+        <div id="people"></div>
+      </div>
+    </section>
+
+    <p id="loading" class="center muted loading">Loading…</p>
+  </main>
+
+  <nav id="tabbar" class="tabbar" aria-label="Main" hidden>
+    <button data-tab="home" aria-label="Home">
+      <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>
+    </button>
+    <button data-tab="feed" aria-label="Feed">
+      <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="11" rx="3"/><path d="M3 18h18M3 21h12"/></svg>
+    </button>
+    <button data-tab="people" aria-label="People">
+      <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.8"/><path d="M16 14.2a5.5 5.5 0 0 1 5.5 5.8"/></svg>
+    </button>
+  </nav>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <!-- If the app can't start (e.g. a typo in config.js), say so instead of "Loading…" forever -->
+  <script>
+    function bootError(msg) {
+      var el = document.getElementById("loading");
+      if (el && !el.hidden && el.textContent.indexOf("Loading") === 0) el.textContent = "The app couldn't start: " + msg + " (check config.js, then reload)";
+    }
+    window.addEventListener("error", function (e) { bootError(e.message || "a file failed to load"); }, true);
+    window.addEventListener("unhandledrejection", function (e) { bootError(String(e.reason && e.reason.message || e.reason)); });
+    setTimeout(function () { bootError("it took too long. Is your internet on, and are the values in config.js right?"); }, 15000);
+  </script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
