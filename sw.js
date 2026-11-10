@@ -1,8 +1,8 @@
 // Service worker: install support, faster loading, and reminders.
 
-const CACHE = "bdt-v3"; // bump when you change the list below
+const CACHE = "bdt-v5"; // bump when you change the list below
 const SHELL = [
-  "./", "./index.html", "./app.js", "./clock.js", "./photo.js", "./push.js",
+  "./", "./index.html", "./app.js", "./photo.js", "./push.js",
   "./config.js", "./styles.css", "./manifest.webmanifest",
   "./icons/icon-180.png", "./icons/icon-192.png", "./icons/icon-512.png", "./icons/badge-96.png",
 ];

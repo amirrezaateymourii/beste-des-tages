@@ -10,7 +10,6 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
-import { createClockPicker } from "./clock.js";
 import { preparePhoto } from "./photo.js";
 import { pushSupport, enablePush, disablePush, clearReminder } from "./push.js";
 
@@ -73,6 +72,7 @@ const ICON = {
   close: '<path d="M6 6l12 12M18 6L6 18"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   chevron: '<path d="M9 18l6-6-6-6"/>',
+  pencil: '<path d="M4 20h4L19 9l-4-4L4 16z"/>',
 };
 
 function must({ data, error }) {
@@ -155,8 +155,47 @@ const pairIds = () => state.pairs.filter((p) => p.members.length === 2).map((p) 
 
 function avatar(person, size = "") {
   const cls = `avatar ${size} ${person?.id === state.user?.id ? "" : "them"}`;
-  if (person?.avatarUrl) return h("img", { class: cls, src: person.avatarUrl, alt: "" });
+  if (person?.avatarUrl) return h("img", { class: cls, src: person.avatarUrl, alt: "", draggable: "false", oncontextmenu: (e) => e.preventDefault() });
   return h("span", { class: cls, "aria-hidden": "true" }, [...(person?.name || "?")][0].toUpperCase());
+}
+
+
+// A profile picture you can tap to see bigger (only if there is one).
+function viewable(person, size) {
+  if (!person?.avatarUrl) return avatar(person, size);
+  const name = person.id === state.user?.id ? "your" : `${person.name}'s`;
+  return h("button", { type: "button", class: "avatar-btn", "aria-label": `View ${name} profile picture`, onclick: () => openViewer(person) },
+    avatar(person, size));
+}
+
+// Full-screen preview: the picture grows into a big circle over a blurred,
+// faded background. Tap anywhere, press Escape or use the phone's back
+// gesture to close.
+function openViewer(person) {
+  const opener = document.activeElement;
+  const name = person.id === state.user?.id ? state.me.name : person.name;
+  let closed = false;
+  const finish = () => {
+    if (closed) return;
+    closed = true;
+    document.removeEventListener("keydown", onKey);
+    window.removeEventListener("popstate", finish);
+    v.classList.remove("on");
+    setTimeout(() => v.remove(), 220);
+    opener?.focus?.();
+  };
+  const close = () => (history.state?.viewer ? history.back() : finish());
+  const onKey = (e) => { if (e.key === "Escape") close(); };
+  const v = h("div", { class: "viewer", role: "dialog", "aria-modal": "true", "aria-label": `${name}, profile picture`, onclick: close },
+    h("img", { class: "viewer-img", src: person.avatarUrl, alt: `${name}, profile picture`, draggable: "false", oncontextmenu: (e) => e.preventDefault() }),
+    h("p", { class: "viewer-name", dir: "auto" }, name),
+    h("button", { type: "button", class: "round-btn viewer-close", "aria-label": "Close" }, svg(ICON.close)));
+  document.body.append(v);
+  history.pushState({ viewer: true }, "");
+  window.addEventListener("popstate", finish);
+  document.addEventListener("keydown", onKey);
+  requestAnimationFrame(() => v.classList.add("on"));
+  v.querySelector(".viewer-close").focus();
 }
 
 // ================================================================ routing
@@ -289,6 +328,7 @@ async function switchTab(tab) {
 // =================================================================== home
 
 async function refreshHome() {
+  renderNudge();
   await shareToNewBesties();
   await loadWeek();
   renderStrip();
@@ -435,9 +475,12 @@ function renderDay() {
 
 function entryBlock(person, e, day, editable, wrote = false) {
   const isMe = person.id === state.user.id;
-  const who = h("div", { class: "who" }, avatar(person), h("span", { class: "grow", dir: "auto" }, isMe ? "You" : person.name),
-    isMe && editable && e ? h("button", { class: "text-btn", onclick: () => startEdit(e) }, "Edit")
-      : e && day === today() ? h("span", { class: "time" }, timeOf(e.created_at)) : null);
+  // Name on the left; at the end of the line the time it was posted, in a
+  // pale colour (after "Edit" on your own moment).
+  const who = h("div", { class: "who" }, avatar(person),
+    h("span", { class: "grow", dir: "auto" }, isMe ? "You" : person.name),
+    e?.created_at ? h("time", { class: "posted-at", datetime: e.created_at }, timeOf(e.created_at)) : null,
+    isMe && editable && e ? h("button", { class: "edit-btn", "aria-label": "Edit your moment", onclick: () => startEdit(e) }, svg(ICON.pencil, 16)) : null);
   if (!e) {
     let text = "Nothing this day";
     if (!isMe && wrote) text = "Wrote · save yours to see it";
@@ -549,6 +592,63 @@ async function save() {
   renderDay();
 }
 
+
+// ---------------------------------------------------- notifications (once)
+// No settings: the app asks once. After that, the server sends at most one
+// reminder per evening (random time between 20:00 and 23:00 Tehran time),
+// only if you haven't written yet.
+
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch { /* private mode */ } },
+};
+
+async function turnOnReminders() {
+  await enablePush(sb);
+  must(await sb.from("profiles").update({ reminders_enabled: true,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }).eq("id", state.user.id));
+  state.profile.reminders_enabled = true;
+}
+
+function renderNudge() {
+  const box = $("nudge");
+  box.replaceChildren();
+  const s = pushSupport();
+  const later = Number(store.get("nudge-later") || 0);
+  const snoozed = Date.now() < later;
+
+  if (s.ok && "Notification" in window && Notification.permission === "granted") {
+    // Already allowed (e.g. after signing in again): reconnect quietly.
+    if (!state.profile.reminders_enabled || !store.get("push-ok")) {
+      turnOnReminders().then(() => store.set("push-ok", "1")).catch(console.error);
+    }
+    return;
+  }
+  if (snoozed) return;
+  if (!s.ok) {
+    if (s.code !== "install") return; // blocked or unsupported: don't nag
+    box.append(h("div", { class: "nudge" },
+      h("p", {}, "Add the app to your Home Screen to get an evening nudge when you haven't written yet."),
+      h("p", { class: "hint" }, "Safari → Share → Add to Home Screen"),
+      h("button", { class: "quiet-btn", onclick: () => { store.set("nudge-later", String(Date.now() + 7 * 864e5)); renderNudge(); } }, "Got it")));
+    return;
+  }
+  box.append(h("div", { class: "nudge" },
+    h("p", {}, "Get one nudge in the evening if you haven't written yet."),
+    h("div", { class: "tools" },
+      h("button", { class: "btn", onclick: action(async () => {
+        try {
+          await turnOnReminders(); // asks for permission: needs this tap
+          store.set("push-ok", "1");
+          toast("Notifications on 🌙");
+        } catch (err) {
+          toast(err.message);
+        }
+        renderNudge();
+      }) }, "Turn on"),
+      h("button", { class: "quiet-btn", onclick: () => { store.set("nudge-later", String(Date.now() + 3 * 864e5)); renderNudge(); } }, "Not now"))));
+}
+
 // =================================================================== feed
 
 async function renderFeed() {
@@ -573,8 +673,8 @@ async function renderFeed() {
     const photoUrl = e.photo_path ? urls.get(e.photo_path) : null;
     if (photoUrl) {
       return h("article", { class: "post" },
-        h("div", { class: "post-photo" }, h("img", { src: photoUrl, alt: `Photo from ${name}`, loading: "lazy" }),
-          h("span", { class: "chip" }, avatar(p, "s30"), h("span", { dir: "auto" }, name), ` · ${when}`)),
+        h("div", { class: "post-photo" }, h("img", { class: "main", src: photoUrl, alt: `Photo from ${name}`, loading: "lazy" }),
+          h("span", { class: "chip" }, avatar(p, "s22"), h("span", { dir: "auto" }, name), ` · ${when}`)),
         h("p", { class: "post-text", dir: "auto" }, e.body),
         e.song_url ? songFrame(e.song_url) : null);
     }
@@ -590,8 +690,6 @@ async function renderFeed() {
 
 // ================================================================= people
 
-let clock;
-
 async function renderPeople() {
   await loadPeople();
   const days = must(await sb.from("entries").select("day").eq("author_id", state.user.id).order("day", { ascending: false }).limit(1000));
@@ -600,14 +698,16 @@ async function renderPeople() {
   let cursor = unique[0] === today() ? today() : yesterday();
   for (const d of unique) { if (d === cursor) { streak++; cursor = addDays(cursor, -1); } else if (d < cursor) break; }
 
-  const p = state.profile;
-  const time = (p.reminder_time ?? "21:00").slice(0, 5);
-
   const me = h("section", { class: "me" },
-    h("label", { class: "avatar-pick", title: "Change profile picture" },
-      avatar(state.me, "s76"),
-      h("input", { type: "file", accept: "image/*", "aria-label": "Change profile picture", onchange: pickAvatar }),
-      h("span", { class: "plus", "aria-hidden": "true" }, svg(ICON.plus, 13))),
+    h("div", { class: "avatar-pick" },
+      state.me.avatarUrl
+        ? viewable(state.me, "s76")
+        // no picture yet: tapping the circle picks one
+        : h("label", { class: "avatar-btn", title: "Add a profile picture" }, avatar(state.me, "s76"),
+            h("input", { type: "file", accept: "image/*", class: "sr-only", "aria-label": "Add a profile picture", onchange: pickAvatar })),
+      h("label", { class: "plus", title: "Change profile picture" },
+        h("input", { type: "file", accept: "image/*", class: "sr-only", "aria-label": "Change profile picture", onchange: pickAvatar }),
+        svg(ICON.plus, 13))),
     h("div", {},
       h("div", { class: "name", dir: "auto" }, state.me.name),
       h("div", { class: "muted" }, `${unique.length} ${unique.length === 1 ? "moment" : "moments"}` + (streak > 1 ? ` · ${streak} days in a row` : ""))));
@@ -619,15 +719,6 @@ async function renderPeople() {
     h("button", { class: "row dashed", onclick: action(() => openPair(true)) },
       h("span", { class: "avatar s48", style: "background: var(--peach); color: var(--accent-text)", "aria-hidden": "true" }, svg(ICON.plus)),
       openInvite ? `Invite a bestie · code ${openInvite.code}` : "Invite a bestie"));
-
-  const reminderPanel = state.open === "reminder" ? h("div", { class: "panel" },
-    h("div", { class: "switch-row" },
-      h("span", { class: "grow" }, "If you haven't written by this time, your phone reminds you, and again every hour until you have."),
-      h("label", { class: "switch" },
-        h("input", { id: "reminder-toggle", type: "checkbox", role: "switch", "aria-label": "Daily reminder", checked: p.reminders_enabled, onchange: toggleReminder }),
-        h("span", { "aria-hidden": "true" }))),
-    h("div", { id: "clock", class: p.reminders_enabled ? "" : "disabled" }),
-    h("p", { id: "push-status", class: "hint", hidden: true })) : null;
 
   const nameInput = h("input", { id: "my-name", maxlength: "40", dir: "auto", value: state.me.name, "aria-label": "Your name" });
   const namePanel = state.open === "name" ? h("form", { class: "panel", onsubmit: action(async () => {
@@ -642,9 +733,6 @@ async function renderPeople() {
 
   const toggle = (k) => () => { state.open = state.open === k ? null : k; renderPeople(); };
   const settings = h("section", { class: "settings" },
-    h("button", { class: "set-row", "aria-expanded": String(state.open === "reminder"), onclick: toggle("reminder") },
-      h("span", { class: "grow" }, "Daily reminder"), h("span", { class: "val" }, p.reminders_enabled ? time : "Off"), svg(ICON.chevron, 18)),
-    reminderPanel,
     h("button", { class: "set-row", "aria-expanded": String(state.open === "name"), onclick: toggle("name") },
       h("span", { class: "grow" }, "Your name"), svg(ICON.chevron, 18)),
     namePanel);
@@ -653,15 +741,10 @@ async function renderPeople() {
 
   $("people").replaceChildren(me, besties, settings, signOut);
 
-  if (state.open === "reminder") {
-    clock = createClockPicker($("clock"), { value: time, onChange: saveReminderTime });
-    const s = pushSupport();
-    if (!s.ok) setPushStatus(s.why);
-  }
 }
 
 function bestieRow(b) {
-  const row = h("div", { class: "row" }, avatar(b, "s48"),
+  const row = h("div", { class: "row" }, viewable(b, "s48"),
     h("div", { class: "grow" }, h("span", { class: "main", dir: "auto" }, b.name),
       h("span", { class: "sub" }, "Since " + new Date(b.since).toLocaleDateString("en-GB", { day: "numeric", month: "long" }))));
   const more = h("button", { class: "quiet-btn", "aria-label": `Unpair from ${b.name}` }, "Unpair");
@@ -690,48 +773,6 @@ const pickAvatar = action(async (e) => {
   toast("Looking good");
   await renderPeople();
 });
-
-function setPushStatus(text) {
-  const el = $("push-status");
-  if (!el) return;
-  el.hidden = !text;
-  el.textContent = text;
-}
-
-async function toggleReminder(e) {
-  const on = e.target.checked;
-  try {
-    if (on) {
-      const s = pushSupport();
-      if (!s.ok) throw new Error(s.why);
-      await enablePush(sb); // asks for permission: needs this tap
-    } else {
-      await disablePush(sb);
-    }
-    must(await sb.from("profiles").update({ reminders_enabled: on, reminder_time: clock.value,
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }).eq("id", state.user.id));
-    state.profile.reminders_enabled = on;
-    state.profile.reminder_time = clock.value;
-    $("clock").classList.toggle("disabled", !on);
-    setPushStatus("");
-    toast(on ? `Reminder on, every day at ${clock.value}` : "Reminder off");
-    document.querySelector(".set-row .val").textContent = on ? clock.value : "Off";
-  } catch (err) {
-    e.target.checked = !on;
-    setPushStatus(err.message);
-  }
-}
-
-async function saveReminderTime(value) {
-  try {
-    must(await sb.from("profiles").update({ reminder_time: value }).eq("id", state.user.id));
-    state.profile.reminder_time = value;
-    if (state.profile.reminders_enabled) document.querySelector(".set-row .val").textContent = value;
-    toast(state.profile.reminders_enabled ? `Reminder set for ${value}` : `Time set to ${value}. Turn the reminder on to use it`);
-  } catch (err) {
-    toast(err.message);
-  }
-}
 
 async function signOutNow() {
   await disablePush(sb).catch(() => {});

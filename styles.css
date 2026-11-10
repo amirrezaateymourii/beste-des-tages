@@ -126,16 +126,21 @@ button:disabled { opacity: 0.5; cursor: default; }
 .entry + .entry { border-top: 1px solid var(--line); padding-top: 28px; }
 .who { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 800; }
 .who .grow { flex: 1; }
-.who time, .who .time { font-weight: 600; color: var(--muted); font-size: 14px; }
+/* small round pencil after the time, on your own moment */
+.edit-btn { flex: none; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; background: var(--card); color: var(--muted);
+  display: inline-flex; align-items: center; justify-content: center; position: relative; }
+.edit-btn::before { content: ""; position: absolute; inset: -6px; border-radius: 50%; } /* 44px tap area */
+.who .posted-at { font-weight: 600; font-size: 13px; color: var(--faint); font-variant-numeric: tabular-nums; }
 .entry-text { margin: 0; font-size: 24px; line-height: 1.45; font-weight: 700; white-space: pre-wrap; overflow-wrap: anywhere; }
 .entry-text.none { font-size: 18px; font-weight: 600; color: var(--faint); font-style: italic; }
 .photo { display: block; width: 100%; max-height: 420px; object-fit: cover; border-radius: 28px; background: var(--line); }
 .song { display: block; width: 100%; height: 80px; border: 0; border-radius: 14px; }
 
 /* -------------------------------------------------------------- avatar */
-.avatar { flex: none; width: 34px; height: 34px; border-radius: 50%; object-fit: cover; background: var(--peach); color: var(--accent-text);
+.avatar { flex: none; width: 34px; height: 34px; min-width: 0; min-height: 0; max-width: none; max-height: none; aspect-ratio: 1 / 1; border-radius: 50%; object-fit: cover; object-position: center; background: var(--peach); color: var(--accent-text);
   display: inline-flex; align-items: center; justify-content: center; font-weight: 900; font-size: 15px; overflow: hidden; }
 .avatar.them { background: var(--ink); color: var(--bg); }
+.avatar.s22 { width: 22px; height: 22px; font-size: 10px; }
 .avatar.s30 { width: 30px; height: 30px; font-size: 13px; }
 .avatar.s48 { width: 48px; height: 48px; font-size: 20px; }
 .avatar.s76 { width: 76px; height: 76px; font-size: 30px; }
@@ -144,9 +149,13 @@ button:disabled { opacity: 0.5; cursor: default; }
 .feed { display: flex; flex-direction: column; gap: 30px; margin-top: 24px; }
 .post { display: flex; flex-direction: column; gap: 14px; }
 .post-photo { position: relative; }
-.post-photo img { display: block; width: 100%; max-height: 460px; min-height: 240px; object-fit: cover; border-radius: 32px; background: var(--line); }
-.chip { position: absolute; top: 14px; left: 14px; display: flex; align-items: center; gap: 8px; padding: 5px 14px 5px 5px; border-radius: 999px;
-  background: rgba(43,36,32,.45); color: #fff; font-size: 14px; font-weight: 800; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+.post-photo > img.main { display: block; width: 100%; max-height: 460px; min-height: 240px; object-fit: cover; border-radius: 32px; background: var(--line); }
+/* small name badge on the photo: profile picture + name + day */
+.chip { position: absolute; top: 12px; left: 12px; max-width: calc(100% - 24px); display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px 3px 3px; border-radius: 999px; background: rgba(43,36,32,.5); color: #fff;
+  font-size: 13px; font-weight: 800; line-height: 1; white-space: nowrap; overflow: hidden;
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+.chip .avatar { border: 1.5px solid rgba(255,255,255,.85); }
 .post-text { margin: 0 6px; font-size: 19px; line-height: 1.55; font-weight: 600; white-space: pre-wrap; overflow-wrap: anywhere; }
 .quote { background: var(--card); border-radius: 32px; padding: 26px 24px; display: flex; flex-direction: column; gap: 18px; }
 .quote .post-text { margin: 0; font-size: 24px; font-weight: 700; }
@@ -158,10 +167,27 @@ button:disabled { opacity: 0.5; cursor: default; }
 .me { display: flex; align-items: center; gap: 16px; padding: 0 4px; }
 .me .name { font-size: 24px; font-weight: 900; }
 .avatar-pick { position: relative; flex: none; border-radius: 50%; }
-.avatar-pick input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .avatar-pick .plus { position: absolute; right: -2px; bottom: -2px; width: 28px; height: 28px; border-radius: 50%; background: var(--ink); color: var(--bg);
-  border: 3px solid var(--bg); display: flex; align-items: center; justify-content: center; pointer-events: none; }
-.avatar-pick:focus-within { outline: 3px solid var(--accent); outline-offset: 3px; }
+  border: 3px solid var(--bg); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.avatar-pick .plus::before { content: ""; position: absolute; inset: -9px; border-radius: 50%; } /* bigger tap area */
+.avatar-pick .plus:focus-within { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+/* tappable profile pictures */
+.avatar-btn { flex: none; display: inline-flex; padding: 0; border: 0; border-radius: 50%; background: none; cursor: zoom-in; }
+.avatar-btn:focus-visible, .avatar-btn:focus-within { outline: 3px solid var(--accent); outline-offset: 3px; }
+img.avatar { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+
+/* profile picture preview (like Instagram) */
+.viewer { position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px;
+  background: rgba(20, 16, 14, 0.55); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+  opacity: 0; transition: opacity 0.2s ease; cursor: zoom-out; }
+.viewer.on { opacity: 1; }
+.viewer-img { width: min(78vw, 340px); aspect-ratio: 1; border-radius: 50%; object-fit: cover; box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+  transform: scale(0.55); transition: transform 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.15); -webkit-touch-callout: none; user-select: none; }
+.viewer.on .viewer-img { transform: scale(1); }
+.viewer-name { margin: 0; color: #fff; font-size: 20px; font-weight: 800; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.4); }
+.viewer-close { position: absolute; top: calc(env(safe-area-inset-top) + 16px); right: 16px; background: rgba(255, 255, 255, 0.16); color: #fff; }
+@media (prefers-reduced-motion: reduce) { .viewer, .viewer-img { transition: none; } }
 .list { display: flex; flex-direction: column; gap: 8px; }
 .row { display: flex; align-items: center; gap: 14px; min-height: 72px; padding: 12px 16px; border-radius: 24px; background: var(--card); }
 .row .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
@@ -185,20 +211,10 @@ button:disabled { opacity: 0.5; cursor: default; }
 .switch input:checked + span::after { transform: translateX(22px); }
 .switch input:focus-visible + span { outline: 3px solid var(--accent); outline-offset: 2px; }
 
-/* ------------------------------------------------------------- clock */
-.clock { display: flex; flex-direction: column; align-items: center; gap: 12px; }
-.clock.disabled { opacity: 0.45; }
-.clock-digits { display: flex; align-items: center; gap: 4px; font-size: 44px; font-weight: 900; }
-.clock-seg { min-height: 64px; min-width: 88px; padding: 0 10px; border: 0; border-radius: 16px; background: var(--bg); color: var(--ink); font-size: 46px; font-weight: 900; font-variant-numeric: tabular-nums; }
-.clock-seg.on { background: var(--peach); }
-.clock-face { position: relative; border-radius: 50%; background: var(--bg); touch-action: none; flex: none; }
-.clock-hand { position: absolute; inset: 0; pointer-events: none; }
-.clock-hand line { stroke: var(--accent); stroke-width: 2.5; }
-.clock-hand circle { fill: var(--accent); }
-.clock-numbers { position: absolute; inset: 0; }
-.clock-num { position: absolute; transform: translate(-50%, -50%); width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--ink); font-size: 17px; font-weight: 700; }
-.clock-num.small { width: 34px; height: 34px; font-size: 14px; color: var(--muted); }
-.clock-num.sel { color: #fff; }
+/* ------------------------------------------------- notification prompt */
+.nudge { background: var(--card); border-radius: 24px; padding: 18px 20px; margin-bottom: 28px; display: flex; flex-direction: column; gap: 12px; }
+.nudge p { margin: 0; font-size: 16px; line-height: 1.45; font-weight: 600; }
+.nudge .btn { min-height: 48px; font-size: 16px; }
 
 /* ------------------------------------------------------------ tab bar */
 .tabbar {
